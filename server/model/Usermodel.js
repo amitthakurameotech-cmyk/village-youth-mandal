@@ -44,8 +44,8 @@ const userSchema = new mongoose.Schema(
 
         role: {
             type: String,
-            enum: ["member", "admin", "superadmin"],
-            default: "member",
+            enum: ["admin", "member", "user"], // 3 roles
+            default: "user"
         },
 
         monthlyFund: {
