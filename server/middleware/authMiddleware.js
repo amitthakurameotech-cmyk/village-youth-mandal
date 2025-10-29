@@ -22,11 +22,27 @@ export const authMiddleware = async (req, res, next) => {
   }
 };
 
-export const isAdmin = (req, res, next) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ success: false, message: "Access denied: Admins only" });
+// export const isAdmin = (req, res, next) => {
+//   if (req.user.role !== "admin") {
+//     return res.status(403).json({ success: false, message: "Access denied: Admins only" });
+//   }
+//   next();
+// };
+// export const isMember = (req, res, next) => {
+//   if (req.user.role !== "member") {
+//     return res.status(403).json({ success: false, message: "Access denied: member only" });
+//   }
+//   next();
+// };
+
+export const isAdminOrMember = (req, res, next) => {
+  if (req.user.role === "admin" || req.user.role === "member") {
+    return next();
   }
-  next();
+  return res.status(403).json({
+    success: false,
+    message: "Access denied: Only Admins or Members can perform this action"
+  });
 };
 // {
 //   "title": "Holi Celebration",

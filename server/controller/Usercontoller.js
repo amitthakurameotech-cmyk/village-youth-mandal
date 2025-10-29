@@ -61,42 +61,7 @@ export const register = async (req, res) => {
   }
 };
 
-// export const login = async (req, res) => {
-//   try {
 
-//     const { email, password } = req.body;
-//     const user = await User.findOne({ email });
-//       console.log(user);
-//     if (!user) {
-//       return res.status(401).send({ message: "Invalid email or password" });
-//     }
-//     // if (!user.isVerified) {
-//     //     return res.status(401).send({ message: "Please verify your phoneNumebr before logging in." });
-//     // }
-//     const Ismatch = await bcrypt.compare(password, user.password);
-//     if (!Ismatch) {
-//       res.status(401).send({ message: " Invalid Or Wrong Password" })
-//     }
-
-//     // ✅ Pass user._id to generateToken
-//     const token = generateToken(user._id);
-//     //console.log(token);
-//     res.status(200).send({
-
-//       message: "User Login Successfully",
-//       email: user.email,
-//       fullName: user.fullName,
-//       id: user._id,
-//       token,
-
-//     });
-
-//     // else
-//     //     res.status(401).send({ message: "User Login Successfully" })
-//   } catch (error) {
-//     console.log("fail to submit data");
-//   }
-// }
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
