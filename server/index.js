@@ -44,7 +44,7 @@ app.get("/getevent", getEvents);
 // =======================
 
 app.post("/feeds", authMiddleware,isAdminOrMember, createFeed);
-app.get("/feeds", authMiddleware, getFeeds);
+app.get("/feeds",  getFeeds);
 // =======================
 // 🚀 SERVER START
 // =======================
