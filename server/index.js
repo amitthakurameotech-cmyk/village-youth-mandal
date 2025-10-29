@@ -62,7 +62,7 @@ app.put("/events/:id", authMiddleware, isAdmin, updateEvent);
 app.delete("/events/:id", authMiddleware, isAdmin, deleteEvent);
 
 // ✅ All authenticated users can view events
-app.get("/getevent", authMiddleware, getEvents);
+app.get("/getevent", getEvents);
 
 // =======================
 // 🚀 SERVER START
