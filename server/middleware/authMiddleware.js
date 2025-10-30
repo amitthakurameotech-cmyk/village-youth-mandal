@@ -35,15 +35,29 @@ export const authMiddleware = async (req, res, next) => {
 //   next();
 // };
 
-export const isAdminOrMember = (req, res, next) => {
-  if (req.user.role === "admin" || req.user.role === "member") {
-    return next();
+export const isAdmin = (req, res, next) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({
+      success: false,
+      message: "Access denied: Admins only"
+    });
   }
-  return res.status(403).json({
-    success: false,
-    message: "Access denied: Only Admins or Members can perform this action"
-  });
+  next();
 };
+
+// export const isAdminOrMember = (req, res, next) => {
+//   if (req.user.role === "admin" || req.user.role === "member") {
+//     return next();
+//   }
+//   return res.status(403).json({
+//     success: false,
+//     message: "Access denied: Only Admins or Members can perform this action"
+//   });
+// };
+
+//--------------------
+//data to test createEvent API
+//--------------------
 // {
 //   "title": "Holi Celebration",
 //   "date": "2025-11-05",

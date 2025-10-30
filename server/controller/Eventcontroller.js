@@ -1,5 +1,6 @@
 import Event from '../model/Eventmodel.js';
 import mongoose from 'mongoose';
+import { getFileUrl } from '../utils/fileHelper.js';
 
 
 export const createEvent = async (req, res) => {
@@ -22,7 +23,7 @@ export const createEvent = async (req, res) => {
       location,
       category,
       description,
-      coverImage: req.file ? req.file.path : req.body.coverImage || "",
+      coverImage: req.file ? getFileUrl(req, req.file.path) : req.body.coverImage || "",
       createdBy,
     };
 
