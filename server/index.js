@@ -48,7 +48,6 @@ app.get("/getevent", getEvents);
 app.post("/feeds", authMiddleware, isAdmin, uploadSingle, createFeed);
 app.get("/feeds", getFeeds);
 app.delete("/deletefeeds/:id", authMiddleware, isAdmin, deleteFeed);
-
 // =======================
 // 🎉 Media ROUTES (Protected)
 // =======================

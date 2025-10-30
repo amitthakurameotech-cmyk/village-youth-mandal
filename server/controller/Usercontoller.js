@@ -26,15 +26,20 @@ export const register = async (req, res) => {
     // Generate 6-digit OTP
     // const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+    // Handle profilePic upload
+    let profilePicPath = "";
+    if (req.file && req.file.path) {
+      profilePicPath = req.file.path;
+    }
+
     // Create user
     const data = await User.create({
       ...req.body,
       fullName,
       email,
       phone: req.body.phone,
-
       password: hashpassword,
-
+      profilePic: profilePicPath,
     });
 
     // Send OTP via Twilio
