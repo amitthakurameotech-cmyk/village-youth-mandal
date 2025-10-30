@@ -47,25 +47,6 @@ const userSchema = new mongoose.Schema(
             enum: ["admin", "member", "user"], // 3 roles
             default: "user"
         },
-
-        monthlyFund: {
-            type: Number,
-            default: 0, // total fund contributed
-        },
-
-        isActive: {
-            type: Boolean,
-            default: true,
-        },
-
-        lastLogin: {
-            type: Date,
-        },
-
-        joinedAt: {
-            type: Date,
-            default: Date.now,
-        },
     },
     {
         timestamps: true, // automatically adds createdAt & updatedAt

@@ -20,7 +20,7 @@ const eventSchema = new mongoose.Schema(
 
         location: {
             type: String,
-            required: [true, "Event location is required"],
+            // required: [true, "Event location is required"],
             trim: true,
         },
 
