@@ -30,13 +30,13 @@ app.post("/login", login);
 // =======================
 
 // ✅ Only Admin can create event
-app.post("/events", authMiddleware, isAdmin, uploadEventCover, createEvent);
+app.post("/events", isAdmin, uploadEventCover, createEvent);
 
 // ✅ Only Admin can update event
-app.put("/events/:id", authMiddleware, isAdmin, uploadEventCover, updateEvent);
+app.put("/events/:id", isAdmin, uploadEventCover, updateEvent);
 
 // ✅ Only Admin can delete event
-app.delete("/events/:id", authMiddleware, isAdmin, deleteEvent);
+app.delete("/events/:id", isAdmin, deleteEvent);
 
 // ✅ All authenticated users can view events
 app.get("/getevent", getEvents);
