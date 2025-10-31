@@ -45,15 +45,15 @@ app.get("/getevent", getEvents);
 // 🎉 Feed ROUTES (Protected)
 // =======================
 
-app.post("/feeds", authMiddleware, isAdmin, uploadSingle, createFeed);
+app.post("/feeds",  isAdmin, uploadSingle, createFeed);
 app.get("/feeds", getFeeds);
-app.delete("/deletefeeds/:id", authMiddleware, isAdmin, deleteFeed);
+app.delete("/deletefeeds/:id",  isAdmin, deleteFeed);
 // =======================
 // 🎉 Media ROUTES (Protected)
 // =======================
-app.post("/createMedia", authMiddleware, isAdmin, uploadMedia, createMedia);
+app.post("/createMedia",  isAdmin, uploadMedia, createMedia);
 app.get("/getMedia", getMedia);
-app.delete("/deleteMedia/:id", authMiddleware, isAdmin, deleteMedia);
+app.delete("/deleteMedia/:id",  isAdmin, deleteMedia);
 // =======================
 // 🚀 SERVER START
 // =======================

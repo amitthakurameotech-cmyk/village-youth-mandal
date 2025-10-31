@@ -9,13 +9,7 @@ export const createFeed = async (req, res) => {
         if (!title || !description || !createdBy) {
             return res.status(400).json({ success: false, message: "Please provide title, content, and createdBy." });
         }   
-        // const feedData = {
-        //     title,
-        //     description,
-        //     category,
-        //     image: req.file ? req.file.path : req.body.image || "",
-        //     createdBy,
-        // };
+        
 
         const feed = await Feed.create({
             ...req.body,
