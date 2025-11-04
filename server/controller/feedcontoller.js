@@ -35,7 +35,7 @@ export const createFeed = async (req, res) => {
 
 export const getFeeds = async (req, res) => {
     try {
-        const feeds =  await Feed.find().populate("createdBy");
+        const feeds =  await Feed.find();
         res.status(200).json({ success: true, data: feeds });
 
     } catch (error) {
