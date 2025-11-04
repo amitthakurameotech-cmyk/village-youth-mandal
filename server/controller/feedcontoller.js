@@ -3,18 +3,18 @@ import { getFileUrl } from '../utils/fileHelper.js';
 
 export const createFeed = async (req, res) => {
     try {
-        const { title, description,createdBy } = req.body;
+        const { title, description } = req.body;
 
         // Validate required fields
-        if (!title || !description || !createdBy) {
-            return res.status(400).json({ success: false, message: "Please provide title, content, and createdBy." });
+        if (!title || !description ) {
+            return res.status(400).json({ success: false, message: "Please provide title, content." });
         }   
         
 
         const feed = await Feed.create({
             ...req.body,
             image: req.file ? getFileUrl(req, req.file.path) : req.body.image || "",
-            createdBy,
+           
         });
 
         if (!feed) {
