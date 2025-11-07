@@ -30,13 +30,13 @@ app.post("/login", login);
 // =======================
 
 // ✅ Only Admin can create event
-app.post("/events", isAdmin, uploadEventCover, createEvent);
+app.post("/events", uploadEventCover, createEvent);
 
 // ✅ Only Admin can update event
-app.put("/events/:id", isAdmin, uploadEventCover, updateEvent);
+app.put("/events/:id", uploadEventCover, updateEvent);
 
 // ✅ Only Admin can delete event
-app.delete("/events/:id", isAdmin, deleteEvent);
+app.delete("/events/:id", deleteEvent);
 
 // ✅ All authenticated users can view events
 app.get("/getevent", getEvents);
@@ -47,13 +47,13 @@ app.get("/getevent", getEvents);
 
 app.post("/feeds",  uploadSingle, createFeed);
 app.get("/feeds", getFeeds);
-app.delete("/deletefeeds/:id",  isAdmin, deleteFeed);
+app.delete("/deletefeeds/:id", deleteFeed);
 // =======================
 // 🎉 Media ROUTES (Protected)
 // =======================
-app.post("/createMedia",  isAdmin, uploadMedia, createMedia);
+app.post("/createMedia", uploadMedia, createMedia);
 app.get("/getMedia", getMedia);
-app.delete("/deleteMedia/:id",  isAdmin, deleteMedia);
+app.delete("/deleteMedia/:id", deleteMedia);
 // =======================
 // 🚀 SERVER START
 // =======================

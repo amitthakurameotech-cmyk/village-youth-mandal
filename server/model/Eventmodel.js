@@ -41,23 +41,20 @@ const eventSchema = new mongoose.Schema(
             default: "",
         },
 
-        createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: true,
-        },
+        // createdBy: {
+        //     type: mongoose.Schema.Types.ObjectId,
+        //     ref: "User",
+        //     required: true,
+        // },
 
-        attendees: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "User",
-            },
-        ],
+        // attendees: [
+        //     {
+        //         type: mongoose.Schema.Types.ObjectId,
+        //         ref: "User",
+        //     },
+        // ],
 
-        isActive: {
-            type: Boolean,
-            default: true,
-        },
+      
     },
     { timestamps: true }
 );

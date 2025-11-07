@@ -5,10 +5,10 @@ import { getFileUrl } from '../utils/fileHelper.js';
 
 export const createEvent = async (req, res) => {
   try {
-    const { title, date, time, location, category, description, createdBy } = req.body;
+    const { title, date, time, location, category, description } = req.body;
 
     // ✅ Step 1: Validate required fields
-    if (!title || !date || !time || !location || !category || !createdBy) {
+    if (!title || !date || !time || !location || !category ) {
       return res.status(400).send({
         success: false,
         message: "Please provide all required fields: title, date, time, location, category, and createdBy.",
@@ -24,7 +24,7 @@ export const createEvent = async (req, res) => {
       category,
       description,
       coverImage: req.file ? getFileUrl(req, req.file.path) : req.body.coverImage || "",
-      createdBy,
+      
     };
 
     // ✅ Step 3: Save event
