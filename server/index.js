@@ -5,7 +5,7 @@ import express from "express";
 import { connectDB } from "./config/db.js";
 import { login, register } from "./controller/Usercontoller.js";
 import { createEvent, updateEvent, deleteEvent, getEvents } from "./controller/Eventcontroller.js";
-import { authMiddleware, isAdmin } from "./middleware/authMiddleware.js";
+// import { authMiddleware, isAdmin } from "./middleware/authMiddleware.js";
 import { createFeed, deleteFeed, getFeeds } from "./controller/feedcontoller.js";
 import { createMedia, deleteMedia, getMedia } from "./controller/mediacontoller.js";
 import { uploadProfilePic, uploadEventCover, uploadSingle, uploadMedia } from './middleware/multerMiddleware.js';
