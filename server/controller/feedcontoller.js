@@ -6,7 +6,7 @@ export const createFeed = async (req, res) => {
         const { title, description } = req.body;
 
         // Validate required fields
-        if (!title || !description ) {
+        if (!title || !description) {
             return res.status(400).json({ success: false, message: "Please provide title, content." });
         }   
         

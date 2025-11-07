@@ -12,7 +12,7 @@ import { uploadProfilePic, uploadEventCover, uploadSingle, uploadMedia } from '.
 
 
 dotenv.config();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8000;
 const app = express();
 
 app.use(express.json());
@@ -45,7 +45,7 @@ app.get("/getevent", getEvents);
 // 🎉 Feed ROUTES (Protected)
 // =======================
 
-app.post("/feeds",  isAdmin, uploadSingle, createFeed);
+app.post("/feeds",  uploadSingle, createFeed);
 app.get("/feeds", getFeeds);
 app.delete("/deletefeeds/:id",  isAdmin, deleteFeed);
 // =======================
