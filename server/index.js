@@ -4,11 +4,10 @@ import cors from "cors";
 import express from "express";
 import { connectDB } from "./config/db.js";
 import { login, register } from "./controller/Usercontoller.js";
-import { createEvent, updateEvent, deleteEvent, getEvents } from "./controller/Eventcontroller.js";
-// import { authMiddleware, isAdmin } from "./middleware/authMiddleware.js";
-import { createFeed, deleteFeed, getFeeds } from "./controller/feedcontoller.js";
-import { createMedia, deleteMedia, getMedia } from "./controller/mediacontoller.js";
-import { uploadProfilePic, uploadEventCover, uploadSingle, uploadMedia } from './middleware/multerMiddleware.js';
+
+import { uploadcarpic, uploadProfilePic } from './middleware/multerMiddleware.js';
+import { createCar, deleteCar,  getCarDataById,  getCars, updateCar } from "./controller/Carcontoller.js";
+import {  approveCancelRequest, createBooking, deleteBooking, getBookingDataByUserId, getBookings, updateBooking } from "./controller/BookingController.js";
 
 
 dotenv.config();
@@ -25,35 +24,30 @@ app.use('/uploads', express.static('uploads')); // Serve uploaded files
 app.post("/register", uploadProfilePic, register);
 app.post("/login", login);
 
-// =======================
-// 🎉 EVENT ROUTES (Protected)
-// =======================
-
-// ✅ Only Admin can create event
-app.post("/events", uploadEventCover, createEvent);
-
-// ✅ Only Admin can update event
-app.put("/events/:id", uploadEventCover, updateEvent);
-
-// ✅ Only Admin can delete event
-app.delete("/events/:id", deleteEvent);
-
-// ✅ All authenticated users can view events
-app.get("/getevent", getEvents);
 
 // =======================
-// 🎉 Feed ROUTES (Protected)
+// 🔐 Car ROUTES
 // =======================
 
-app.post("/feeds",  uploadSingle, createFeed);
-app.get("/feeds", getFeeds);
-app.delete("/deletefeeds/:id", deleteFeed);
+app.post("/cars", uploadcarpic, createCar);
+app.get("/cars", getCars);
+app.get("/cars/:id", getCarDataById);
+app.put("/cars/:id", updateCar);
+app.delete("/cars/:id", deleteCar);
 // =======================
-// 🎉 Media ROUTES (Protected)
+// 🔐 Booking ROUTES
 // =======================
-app.post("/createMedia", uploadMedia, createMedia);
-app.get("/getMedia", getMedia);
-app.delete("/deleteMedia/:id", deleteMedia);
+app.post("/bookings", createBooking);
+app.get("/bookings", getBookings);
+ app.get("/bookings/:userId", getBookingDataByUserId);
+app.put("/bookings/:id", updateBooking);
+app.delete("/bookings/:id", deleteBooking);
+app.patch("/approve/:id",approveCancelRequest );
+// app.delete("/cancel/:id",cancelBooking );
+
+
+
+
 // =======================
 // 🚀 SERVER START
 // =======================

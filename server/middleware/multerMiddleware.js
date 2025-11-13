@@ -40,8 +40,7 @@ const upload = multer({
     }
 });
 
-// Export different upload middlewares for different use cases
-export const uploadSingle = upload.single('image'); // For single image upload
+
+ // For single image upload for user profile pictures
 export const uploadProfilePic = upload.single('profilePic'); // For profile pictures
-export const uploadEventCover = upload.single('coverImage'); // For event cover images
-export const uploadMedia = upload.single('photoOrVideo'); // For media uploads
+export const uploadcarpic = upload.single('image'); // For profile pictures
