@@ -8,6 +8,7 @@ import { login, register } from "./controller/Usercontoller.js";
 import { uploadcarpic, uploadProfilePic } from './middleware/multerMiddleware.js';
 import { createCar, deleteCar,  getCarDataById,  getCars, updateCar } from "./controller/Carcontoller.js";
 import {  approveCancelRequest, createBooking, deleteBooking, getBookingDataByUserId, getBookings, updateBooking } from "./controller/BookingController.js";
+import { authMiddleware, isAdmin } from "./middleware/authMiddleware.js";
 
 
 dotenv.config();
@@ -29,15 +30,15 @@ app.post("/login", login);
 // 🔐 Car ROUTES
 // =======================
 
-app.post("/cars", uploadcarpic, createCar);
+app.post("/cars", authMiddleware,isAdmin, uploadcarpic, createCar);
 app.get("/cars", getCars);
 app.get("/cars/:id", getCarDataById);
-app.put("/cars/:id", updateCar);
-app.delete("/cars/:id", deleteCar);
+app.put("/cars/:id", authMiddleware,isAdmin, updateCar);
+app.delete("/cars/:id",authMiddleware,isAdmin, deleteCar);
 // =======================
 // 🔐 Booking ROUTES
 // =======================
-app.post("/bookings", createBooking);
+app.post("/bookings",authMiddleware, createBooking);
 app.get("/bookings", getBookings);
  app.get("/bookings/:userId", getBookingDataByUserId);
 app.put("/bookings/:id", updateBooking);
