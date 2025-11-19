@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import express from "express";
 import { connectDB } from "./config/db.js";
-import { login, register } from "./controller/Usercontoller.js";
+import { login, register, requestPasswordReset, resetPassword } from "./controller/Usercontoller.js";
 
 import { uploadcarpic, uploadProfilePic } from './middleware/multerMiddleware.js';
 import { createCar, deleteCar,  getCarDataById,  getCars, updateCar } from "./controller/Carcontoller.js";
@@ -24,6 +24,8 @@ app.use('/uploads', express.static('uploads')); // Serve uploaded files
 // =======================
 app.post("/register", uploadProfilePic, register);
 app.post("/login", login);
+app.post("/forgetpassword", requestPasswordReset);
+app.patch("/forgetpassword/:token", resetPassword);
 
 
 // =======================

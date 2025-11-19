@@ -120,79 +120,9 @@ export const deleteBooking = async (req, res) => {
   }
 };
 
-// ✅ Approve (confirm) a pending booking
-export const approveBooking = async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid or missing booking ID" });
-    }
 
-    const booking = await Bookingmodel.findById(id).populate("car user");
-    if (!booking) {
-      return res.status(404).json({ success: false, message: "Booking not found" });
-    }
 
-    if (booking.bookingStatus !== "Pending") {
-      return res.status(400).json({ success: false, message: `Only bookings with status 'Pending' can be confirmed. Current status: ${booking.bookingStatus}` });
-    }
-
-    // Update status to Confirm
-    booking.bookingStatus = "Confirm";
-    await booking.save();
-
-    // Ensure car is marked unavailable
-    if (booking.car) {
-      await Carmodel.findByIdAndUpdate(booking.car._id || booking.car, { available: false });
-    }
-
-    return res.status(200).json({ success: true, message: "Booking confirmed", data: booking });
-  } catch (error) {
-    console.error("❌ Error confirming booking:", error);
-    return res.status(500).json({ success: false, message: "Error confirming booking", error: error.message });
-  }
-};
-
-// ✅ Cancel a booking (and free the car)
-export const cancelBooking = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid or missing booking ID" });
-    }
-
-    const booking = await Bookingmodel.findById(id).populate("car user");
-    if (!booking) {
-      return res.status(404).json({ success: false, message: "Booking not found" });
-    }
-
-    if (booking.bookingStatus === "Cancelled") {
-      return res.status(400).json({ success: false, message: "Booking is already cancelled" });
-    }
-
-    booking.bookingStatus = "Cancelled";
-    // Optionally mark payment as Cancelled if not already paid
-    booking.paymentStatus = booking.paymentStatus === "Paid" ? booking.paymentStatus : "Cancelled";
-    await booking.save();
-
-    // Free the car
-    if (booking.car) {
-      await Carmodel.findByIdAndUpdate(booking.car._id || booking.car, { available: true });
-    }
-
-    return res.status(200).json({ success: true, message: "Booking cancelled", data: booking });
-  } catch (error) {
-    console.error("❌ Error cancelling booking:", error);
-    return res.status(500).json({ success: false, message: "Error cancelling booking", error: error.message });
-  }
-};
-
-// ✅ Combined approve/cancel endpoint
-// Accepts action via query `?action=approve|cancel` or body `{ action: 'approve'|'cancel' }`.
-// - approve -> set bookingStatus to 'Confirm' (only allowed from 'Pending') and mark car unavailable
-// - cancel  -> set bookingStatus to 'Cancelled' (unless already) and mark car available; paymentStatus set to 'Cancelled' unless already 'Paid'
 export const approveCancelRequest = async (req, res) => {
   try {
     const { id } = req.params;
