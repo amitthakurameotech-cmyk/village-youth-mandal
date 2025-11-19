@@ -25,7 +25,7 @@ app.use('/uploads', express.static('uploads')); // Serve uploaded files
 app.post("/register", uploadProfilePic, register);
 app.post("/login", login);
 app.post("/forgetpassword", requestPasswordReset);
-app.patch("/forgetpassword/:token", resetPassword);
+app.patch("/reset-password/:token", resetPassword);
 
 
 // =======================
