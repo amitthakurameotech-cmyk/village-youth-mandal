@@ -193,8 +193,13 @@ async function handleCheckoutSessionCompleted(session) {
         stripePaymentIntentId: fullSession.payment_intent,
         amount: booking.totalPrice,
         currency: fullSession.currency || "inr",
-        status: "created",
+        status: "pending",
       });
+      console.log(`✅ Payment record created for booking ${bookingId}, session ${session.id} (status: pending)`);
+    } else {
+      payment.status = "pending";
+      await payment.save();
+      console.log(`ℹ️ Payment record already exists for booking ${bookingId}, session ${session.id} (status set to pending)`);
     }
 
     console.log(`✅ Checkout session processed for booking ${bookingId}`);
@@ -241,11 +246,12 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     let payment = await Payment.findOne({ stripePaymentIntentId: paymentIntent.id });
 
     if (payment) {
-      payment.status = "succeeded";
+      payment.status = "confirmed";
       if (cardInfo && Object.keys(cardInfo).length > 0) {
         Object.assign(payment, cardInfo);
       }
       await payment.save();
+      console.log(`✅ Payment record updated to confirmed for booking ${bookingId}, intent ${paymentIntent.id}`);
     } else {
       await Payment.create({
         booking: booking._id,
@@ -253,14 +259,16 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
         stripePaymentIntentId: paymentIntent.id,
         amount: (paymentIntent.amount || 0) / 100,
         currency: paymentIntent.currency || "inr",
-        status: "succeeded",
+        status: "confirmed",
         ...cardInfo,
       });
+      console.log(`✅ Payment record created for booking ${bookingId}, intent ${paymentIntent.id} (status: confirmed)`);
     }
 
     // Update booking payment status
     booking.paymentStatus = "Paid";
     await booking.save();
+    console.log(`✅ Booking ${bookingId} paymentStatus updated to Paid`);
 
     console.log(`✅ Payment succeeded and booking ${bookingId} marked as Paid`);
   } catch (error) {
@@ -280,6 +288,9 @@ async function handlePaymentIntentFailed(paymentIntent) {
     if (payment) {
       payment.status = "failed";
       await payment.save();
+      console.log(`❌ Payment record updated to failed for booking ${bookingId}, intent ${paymentIntent.id}`);
+    } else {
+      console.log(`❌ No payment record found to update for failed payment, booking ${bookingId}, intent ${paymentIntent.id}`);
     }
 
     console.log(`❌ Payment failed for booking ${bookingId}`);
