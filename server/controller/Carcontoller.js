@@ -25,7 +25,7 @@ export const createCar = async (req, res) => {
       fuelType,
       transmission,
       available: req.body.available !== undefined ? req.body.available : true,
-      image: req.file ? getFileUrl(req, req.file.path) : req.body.image || "",
+      image: req.file.path
     };
 
     // Step 3: Save to database
