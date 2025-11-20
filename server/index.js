@@ -54,6 +54,7 @@ app.patch("/approve/:id",approveCancelRequest );
 // 🔐 Payment ROUTES (Stripe Checkout)
 // =======================
 app.post("/payments/checkout/:bookingId", authMiddleware, createCheckoutSession);
+app.post("/payments/create-intent/:bookingId", authMiddleware, createCheckoutSession); // Alias for backward compatibility
 app.get("/payments/user/:userId", authMiddleware, getPaymentHistory);
 app.post("/payments/webhook", handleWebhook); // No auth - Stripe signature verification only
 
