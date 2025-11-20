@@ -1,5 +1,5 @@
 import Booking from "../model/Bookingmodel.js";
-import Carmodel from "../model/Carmodel.js";
+// import Carmodel from "../model/Carmodel.js";
 import Payment from "../model/Paymentmodel.js";
 import stripePackage from "stripe";
 
