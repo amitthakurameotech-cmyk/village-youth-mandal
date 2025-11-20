@@ -39,7 +39,7 @@ export const createCheckoutSession = async (req, res) => {
 
     const amount = Math.round((booking.totalPrice || 0) * 100); // Convert to paise (for INR)
     const currency = process.env.STRIPE_CURRENCY || "inr";
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 
     // Create line items for checkout session
     const lineItems = [
@@ -121,14 +121,18 @@ export const handleWebhook = async (req, res) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
-        console.log(`✅ Checkout session completed: ${session.id}`);
+        console.log(`✅ Payment Successful! Checkout session completed: ${session.id}`);
+
+        // Log full payment details in the console
+        console.log("Full Payment Details:", JSON.stringify(session, null, 2));
+
         await handleCheckoutSessionCompleted(session);
         break;
       }
 
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object;
-        console.log(`✅ Payment intent succeeded: ${paymentIntent.id}`);
+        console.log(`✅ Payment Successful! Payment intent succeeded: ${paymentIntent.id}`);
         await handlePaymentIntentSucceeded(paymentIntent);
         break;
       }
@@ -142,7 +146,7 @@ export const handleWebhook = async (req, res) => {
 
       case "charge.succeeded": {
         const charge = event.data.object;
-        console.log(`✅ Charge succeeded: ${charge.id}`);
+        console.log(`✅ Payment Successful! Charge succeeded: ${charge.id}`);
         await handleChargeSucceeded(charge);
         break;
       }
@@ -355,3 +359,5 @@ export const getPaymentHistory = async (req, res) => {
     });
   }
 };
+// https://localhost:44308/Payment/Success?cartId=15&sessionId=cs_test_a1lxHsAeBbVawbjvwNZ289H532TgKjUbt7ed1BuKxgnoTGnBRyccdVNzhY
+// http://localhost:3000/payment-success?bookingId=691ecf37e1c8454fb58f0f05&sessionId=cs_test_a1H4NAbTNBDTT8gfv9JYDDJrLONtTgDmRrhRPLXhPvvV758jsooMgkEsNM
