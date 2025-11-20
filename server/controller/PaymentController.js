@@ -359,5 +359,40 @@ export const getPaymentHistory = async (req, res) => {
     });
   }
 };
+  // ============================================
+  // Get Stripe Payment Session and Booking Details
+  // ============================================
+  export const getPaymentSession = async (req, res) => {
+    try {
+      const stripe = getStripe();
+      if (!stripe) {
+        return res.status(500).json({ success: false, message: "Stripe not configured" });
+      }
+      const { sessionId } = req.params;
+      const { bookingId } = req.query;
+      if (!sessionId) {
+        return res.status(400).json({ success: false, message: "sessionId is required" });
+      }
+      // Fetch Stripe session details
+      let session;
+      try {
+        session = await stripe.checkout.sessions.retrieve(sessionId);
+      } catch (err) {
+        return res.status(404).json({ success: false, message: "Stripe session not found", error: err.message });
+      }
+      // Fetch booking details from DB
+      let booking = null;
+      if (bookingId) {
+        try {
+          booking = await Booking.findById(bookingId).populate("user").populate("car");
+        } catch (err) {
+          // Ignore booking error, just return null
+        }
+      }
+      return res.json({ success: true, session, booking });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to fetch payment session", error: error.message });
+    }
+  };
 // https://localhost:44308/Payment/Success?cartId=15&sessionId=cs_test_a1lxHsAeBbVawbjvwNZ289H532TgKjUbt7ed1BuKxgnoTGnBRyccdVNzhY
 // http://localhost:3000/payment-success?bookingId=691ecf37e1c8454fb58f0f05&sessionId=cs_test_a1H4NAbTNBDTT8gfv9JYDDJrLONtTgDmRrhRPLXhPvvV758jsooMgkEsNM
