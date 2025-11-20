@@ -9,7 +9,7 @@ import { uploadcarpic, uploadProfilePic } from './middleware/multerMiddleware.js
 import { createCar, deleteCar,  getCarDataById,  getCars, updateCar } from "./controller/Carcontoller.js";
 import {  approveCancelRequest, createBooking, deleteBooking, getBookingDataByUserId, getBookings, updateBooking } from "./controller/BookingController.js";
 import { authMiddleware, isAdmin } from "./middleware/authMiddleware.js";
-import { createPaymentIntent, confirmPayment } from "./controller/PaymentController.js";
+import { createCheckoutSession, handleWebhook, getPaymentHistory } from "./controller/PaymentController.js";
 
 
 dotenv.config();
@@ -51,10 +51,11 @@ app.patch("/approve/:id",approveCancelRequest );
 // app.delete("/cancel/:id",cancelBooking );
 
 // =======================
-// 🔐 Payment ROUTES (Stripe)
+// 🔐 Payment ROUTES (Stripe Checkout)
 // =======================
-app.post("/payments/create-intent/:bookingId", authMiddleware, createPaymentIntent);
-app.post("/payments/confirm", authMiddleware, confirmPayment);
+app.post("/payments/checkout/:bookingId", authMiddleware, createCheckoutSession);
+app.get("/payments/user/:userId", authMiddleware, getPaymentHistory);
+app.post("/payments/webhook", handleWebhook); // No auth - Stripe signature verification only
 
 
 
