@@ -9,6 +9,7 @@ import { uploadcarpic, uploadProfilePic } from './middleware/multerMiddleware.js
 import { createCar, deleteCar,  getCarDataById,  getCars, updateCar } from "./controller/Carcontoller.js";
 import {  approveCancelRequest, createBooking, deleteBooking, getBookingDataByUserId, getBookings, updateBooking } from "./controller/BookingController.js";
 import { authMiddleware, isAdmin } from "./middleware/authMiddleware.js";
+import { createPaymentIntent, confirmPayment } from "./controller/PaymentController.js";
 
 
 dotenv.config();
@@ -48,6 +49,12 @@ app.put("/bookings/:id", updateBooking);
 app.delete("/bookings/:id", deleteBooking);
 app.patch("/approve/:id",approveCancelRequest );
 // app.delete("/cancel/:id",cancelBooking );
+
+// =======================
+// 🔐 Payment ROUTES (Stripe)
+// =======================
+app.post("/payments/create-intent/:bookingId", authMiddleware, createPaymentIntent);
+app.post("/payments/confirm", authMiddleware, confirmPayment);
 
 
 
