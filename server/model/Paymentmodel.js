@@ -15,6 +15,9 @@ const paymentSchema = new mongoose.Schema(
     stripePaymentIntentId: {
       type: String,
     },
+    stripeCheckoutSessionId: {
+      type: String,
+    },
     // Card information (masked). DO NOT store full card numbers.
     stripePaymentMethodId: {
       type: String,

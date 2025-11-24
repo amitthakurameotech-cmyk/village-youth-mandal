@@ -16,6 +16,25 @@ dotenv.config();
 const PORT = process.env.PORT || 8000;
 const app = express();
 
+// Ensure Stripe keys are configured
+const _stripeSecret = process.env.STRIPE_SECRET_KEY ;
+const _webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+if (!_stripeSecret) {
+  console.error("❌ STRIPE secret key not set. Please set STRIPE_SECRET_KEY (or SECRET_KEY/secret_key) in your .env.");
+  process.exit(1);
+}
+if (!_webhookSecret) {
+  console.error("❌ STRIPE webhook secret not set. Please set STRIPE_WEBHOOK_SECRET in your .env.");
+  process.exit(1);
+}
+
+// Mount webhook route first so its raw body middleware runs before express.json()
+app.post(
+  "/payments/webhook",
+  express.raw({ type: "application/json" }),
+  handleWebhook
+);
+
 app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static('uploads')); // Serve uploaded files
@@ -57,12 +76,6 @@ app.post("/payments/checkout/:bookingId", authMiddleware, createCheckoutSession)
 app.post("/payments/create-intent/:bookingId", authMiddleware, createCheckoutSession); // Alias for backward compatibility
 app.get("/payments/user/:userId", authMiddleware, getPaymentHistory);
 app.get("/payments/session/:sessionId", getPaymentSession);
- // No auth - Stripe signature verification only
-app.post(
-  "/payments/webhook",
-  express.raw({ type: "application/json" }),
-  handleWebhook
-);
 
 
 

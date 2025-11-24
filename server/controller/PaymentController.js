@@ -20,10 +20,13 @@ export const createCheckoutSession = async (req, res) => {
       return res.status(400).json({ success: false, message: "bookingId is required" });
     }
 
-    const booking = await Booking.findById(bookingId)
-      .populate("user")
-      .populate("car");
-    
+    let booking;
+    try {
+      booking = await Booking.findById(bookingId).populate("user").populate("car");
+    } catch (dbErr) {
+      console.error(`❌ DB error fetching booking ${bookingId}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
+      return res.status(500).json({ success: false, message: "Failed to fetch booking", error: dbErr && dbErr.message ? dbErr.message : String(dbErr) });
+    }
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found" });
     }
@@ -79,7 +82,7 @@ export const createCheckoutSession = async (req, res) => {
       sessionId: session.id,
     });
   } catch (error) {
-    console.error("❌ createCheckoutSession error:", error.message);
+    console.error("❌ createCheckoutSession error:", error && error.stack ? error.stack : error);
     return res.status(500).json({
       success: false,
       message: "Failed to create checkout session",
@@ -107,13 +110,14 @@ export const handleWebhook = async (req, res) => {
 
   let event;
   try {
+    const rawBody = req.body && typeof req.body === "string" ? req.body : req.body?.toString?.() || "";
     if (webhookSecret) {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
     } else {
-      event = JSON.parse(req.body);
+      event = JSON.parse(rawBody || "{}");
     }
   } catch (err) {
-    console.error("❌ Webhook signature verification failed:", err.message);
+    console.error("❌ Webhook signature verification failed:", err && err.stack ? err.stack : err);
     return res.status(400).json({ success: false, message: "Webhook signature verification failed" });
   }
 
@@ -172,7 +176,13 @@ async function handleCheckoutSessionCompleted(session) {
   }
 
   try {
-    const booking = await Booking.findById(bookingId);
+    let booking;
+    try {
+      booking = await Booking.findById(bookingId);
+    } catch (dbErr) {
+      console.error(`❌ DB error fetching booking ${bookingId}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
+      return;
+    }
     if (!booking) {
       console.warn(`⚠️ Booking not found: ${bookingId}`);
       return;
@@ -182,29 +192,54 @@ async function handleCheckoutSessionCompleted(session) {
     const stripe = getStripe();
     const fullSession = await stripe.checkout.sessions.retrieve(session.id);
 
-    // Find payment record by session ID
-    let payment = await Payment.findOne({ stripePaymentIntentId: fullSession.payment_intent });
+    // Find payment record by payment_intent OR by checkout session id
+    let payment;
+    try {
+      payment = await Payment.findOne({
+        $or: [
+          { stripePaymentIntentId: fullSession.payment_intent },
+          { stripeCheckoutSessionId: fullSession.id },
+        ],
+      });
+    } catch (dbErr) {
+      console.error(`❌ DB error finding payment for booking ${bookingId}, session ${fullSession.id}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
+      return;
+    }
 
     if (!payment) {
-      // Create payment record if not exists
-      payment = await Payment.create({
+      // Create payment record if not exists. Use payment_intent when present otherwise store checkout session id.
+      const paymentData = {
         booking: booking._id,
         user: booking.user || userId,
-        stripePaymentIntentId: fullSession.payment_intent,
         amount: booking.totalPrice,
         currency: fullSession.currency || "inr",
         status: "pending",
-      });
-      console.log(`✅ Payment record created for booking ${bookingId}, session ${session.id} (status: pending)`);
+      };
+      if (fullSession.payment_intent) paymentData.stripePaymentIntentId = fullSession.payment_intent;
+      else paymentData.stripeCheckoutSessionId = fullSession.id;
+
+      try {
+        payment = await Payment.create(paymentData);
+        console.log(`✅ Payment record created for booking ${bookingId}, session ${fullSession.id} (status: pending)`);
+      } catch (createErr) {
+        console.error(`❌ DB error creating payment for booking ${bookingId}, session ${fullSession.id}:`, createErr && createErr.stack ? createErr.stack : createErr, "input:", paymentData);
+        return;
+      }
     } else {
       payment.status = "pending";
-      await payment.save();
-      console.log(`ℹ️ Payment record already exists for booking ${bookingId}, session ${session.id} (status set to pending)`);
+      // Ensure we store checkout session id if it was missing
+      if (!payment.stripeCheckoutSessionId && fullSession.id) payment.stripeCheckoutSessionId = fullSession.id;
+      try {
+        await payment.save();
+        console.log(`ℹ️ Payment record updated for booking ${bookingId}, session ${fullSession.id} (status set to pending)`);
+      } catch (saveErr) {
+        console.error(`❌ DB error saving payment for booking ${bookingId}, session ${fullSession.id}:`, saveErr && saveErr.stack ? saveErr.stack : saveErr);
+      }
     }
 
     console.log(`✅ Checkout session processed for booking ${bookingId}`);
   } catch (error) {
-    console.error("❌ Error in handleCheckoutSessionCompleted:", error.message);
+    console.error("❌ Error in handleCheckoutSessionCompleted:", error && error.stack ? error.stack : error);
   }
 }
 
@@ -218,7 +253,13 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
   }
 
   try {
-    const booking = await Booking.findById(bookingId);
+    let booking;
+    try {
+      booking = await Booking.findById(bookingId);
+    } catch (dbErr) {
+      console.error(`❌ DB error fetching booking ${bookingId}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
+      return;
+    }
     if (!booking) {
       console.warn(`⚠️ Booking not found: ${bookingId}`);
       return;
@@ -242,18 +283,40 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
       }
     }
 
-    // Update or create payment record
-    let payment = await Payment.findOne({ stripePaymentIntentId: paymentIntent.id });
+    // Update or create payment record. Try to find by intent id OR by checkout session id stored on payment.
+    let payment;
+    try {
+      // possible metadata keys that might contain session id
+      const sessionIdsToCheck = [
+        paymentIntent.metadata?.sessionId,
+        paymentIntent.metadata?.session_id,
+        paymentIntent.metadata?.checkout_session_id,
+        paymentIntent.metadata?.checkoutSessionId,
+      ].filter(Boolean);
+
+      const orClauses = [{ stripePaymentIntentId: paymentIntent.id }];
+      sessionIdsToCheck.forEach((sId) => orClauses.push({ stripeCheckoutSessionId: sId }));
+
+      payment = await Payment.findOne({ $or: orClauses });
+    } catch (dbErr) {
+      console.error(`❌ DB error finding payment for booking ${bookingId}, intent ${paymentIntent.id}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
+    }
 
     if (payment) {
       payment.status = "confirmed";
       if (cardInfo && Object.keys(cardInfo).length > 0) {
         Object.assign(payment, cardInfo);
       }
-      await payment.save();
-      console.log(`✅ Payment record updated to confirmed for booking ${bookingId}, intent ${paymentIntent.id}`);
+      // ensure we persist the intent id
+      if (!payment.stripePaymentIntentId) payment.stripePaymentIntentId = paymentIntent.id;
+      try {
+        await payment.save();
+        console.log(`✅ Payment record updated to confirmed for booking ${bookingId}, intent ${paymentIntent.id}`);
+      } catch (saveErr) {
+        console.error(`❌ DB error saving payment for booking ${bookingId}, intent ${paymentIntent.id}:`, saveErr && saveErr.stack ? saveErr.stack : saveErr);
+      }
     } else {
-      await Payment.create({
+      const createData = {
         booking: booking._id,
         user: booking.user || userId,
         stripePaymentIntentId: paymentIntent.id,
@@ -261,8 +324,13 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
         currency: paymentIntent.currency || "inr",
         status: "confirmed",
         ...cardInfo,
-      });
-      console.log(`✅ Payment record created for booking ${bookingId}, intent ${paymentIntent.id} (status: confirmed)`);
+      };
+      try {
+        await Payment.create(createData);
+        console.log(`✅ Payment record created for booking ${bookingId}, intent ${paymentIntent.id} (status: confirmed)`);
+      } catch (createErr) {
+        console.error(`❌ DB error creating payment for booking ${bookingId}, intent ${paymentIntent.id}:`, createErr && createErr.stack ? createErr.stack : createErr, "input:", createData);
+      }
     }
 
     // Update booking payment status
@@ -272,7 +340,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 
     console.log(`✅ Payment succeeded and booking ${bookingId} marked as Paid`);
   } catch (error) {
-    console.error("❌ Error in handlePaymentIntentSucceeded:", error.message);
+    console.error("❌ Error in handlePaymentIntentSucceeded:", error && error.stack ? error.stack : error);
   }
 }
 
@@ -295,7 +363,7 @@ async function handlePaymentIntentFailed(paymentIntent) {
 
     console.log(`❌ Payment failed for booking ${bookingId}`);
   } catch (error) {
-    console.error("❌ Error in handlePaymentIntentFailed:", error.message);
+    console.error("❌ Error in handlePaymentIntentFailed:", error && error.stack ? error.stack : error);
   }
 }
 
@@ -320,7 +388,7 @@ async function handleChargeSucceeded(charge) {
       }
     }
   } catch (error) {
-    console.error("❌ Error in handleChargeSucceeded:", error.message);
+    console.error("❌ Error in handleChargeSucceeded:", error && error.stack ? error.stack : error);
   }
 }
 
@@ -362,7 +430,7 @@ export const getPaymentHistory = async (req, res) => {
       count: maskedPayments.length,
     });
   } catch (error) {
-    console.error("❌ getPaymentHistory error:", error.message);
+    console.error("❌ getPaymentHistory error:", error && error.stack ? error.stack : error);
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve payment history",
@@ -402,7 +470,8 @@ export const getPaymentHistory = async (req, res) => {
       }
       return res.json({ success: true, session, booking });
     } catch (error) {
-      return res.status(500).json({ success: false, message: "Failed to fetch payment session", error: error.message });
+        console.error("❌ getPaymentSession error:", error && error.stack ? error.stack : error);
+        return res.status(500).json({ success: false, message: "Failed to fetch payment session", error: error.message });
     }
   };
 // https://localhost:44308/Payment/Success?cartId=15&sessionId=cs_test_a1lxHsAeBbVawbjvwNZ289H532TgKjUbt7ed1BuKxgnoTGnBRyccdVNzhY

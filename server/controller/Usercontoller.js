@@ -143,7 +143,7 @@ export const requestPasswordReset = async (req, res) => {
     console.log("✅ Reset token saved for user:", user.email);
 
     // Build frontend reset URL
-    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetUrl = `${FRONTEND_URL}/reset-password/${resetToken}`;
     console.log("🔗 Reset URL built:", resetUrl);
 
@@ -159,7 +159,7 @@ export const requestPasswordReset = async (req, res) => {
       try {
         const testAccount = await nodemailer.createTestAccount();
         transporter = nodemailer.createTransport({
-          host: 'smtp.ethereal.email',
+          host: 'smtp-relay.brevo.com',
           port: 587,
           secure: false,
           auth: { user: testAccount.user, pass: testAccount.pass },
