@@ -74,7 +74,7 @@ export const createCheckoutSession = async (req, res) => {
       },
     });
 
-    console.log(`✅ Checkout session created: ${session.id} for booking ${bookingId}`);
+    // console.log(`✅ Checkout session created: ${session.id} for booking ${bookingId}`);
 
     return res.status(201).json({
       success: true,
@@ -91,313 +91,7 @@ export const createCheckoutSession = async (req, res) => {
   }
 };
 
-// ============================================
-// Stripe Webhook Handler
-// ============================================
-export const handleWebhook = async (req, res) => {
-  const stripe = getStripe();
-  if (!stripe) {
-    return res.status(500).json({ success: false, message: "Stripe not configured" });
-  }
-
-  const sig = req.headers["stripe-signature"];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!webhookSecret) {
-    console.warn("⚠️ STRIPE_WEBHOOK_SECRET not configured. Webhook signature verification skipped.");
-    // In production, always verify signatures
-  }
-
-  // Helpful debug info
-  try {
-    console.log("ℹ️ Received webhook, headers:", { signature: !!sig, length: req.headers["content-length"] });
-  } catch (e) {}
-
-  let event;
-  try {
-    // When using express.raw the `req.body` is a Buffer which must be passed directly to constructEvent
-    if (webhookSecret) {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } else {
-      // Fallback for local testing when no webhook secret is configured
-      const text = req.body && req.body.toString ? req.body.toString() : "";
-      event = JSON.parse(text || "{}");
-    }
-  } catch (err) {
-    console.error("❌ Webhook signature verification failed or invalid payload:", err && err.stack ? err.stack : err, "sig:", sig);
-    return res.status(400).json({ success: false, message: "Webhook signature verification failed or invalid payload" });
-  }
-
-  try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        console.log(`✅ Payment Successful! Checkout session completed: ${session.id}`);
-
-        // Log full payment details in the console
-        console.log("Full Payment Details:", JSON.stringify(session, null, 2));
-
-        await handleCheckoutSessionCompleted(session);
-        break;
-      }
-
-      case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object;
-        console.log(`✅ Payment Successful! Payment intent succeeded: ${paymentIntent.id}`);
-        await handlePaymentIntentSucceeded(paymentIntent);
-        break;
-      }
-
-      case "payment_intent.payment_failed": {
-        const paymentIntent = event.data.object;
-        console.log(`❌ Payment intent failed: ${paymentIntent.id}`);
-        await handlePaymentIntentFailed(paymentIntent);
-        break;
-      }
-
-      case "charge.succeeded": {
-        const charge = event.data.object;
-        console.log(`✅ Payment Successful! Charge succeeded: ${charge.id}`);
-        await handleChargeSucceeded(charge);
-        break;
-      }
-
-      default:
-        console.log(`⚠️ Unhandled event type: ${event.type}`);
-    }
-
-    return res.json({ received: true });
-  } catch (error) {
-    console.error("❌ Webhook handler error:", error.message);
-    return res.status(500).json({ success: false, message: "Webhook processing failed" });
-  }
-};
-
-// Handle checkout session completion
-async function handleCheckoutSessionCompleted(session) {
-  const { bookingId, userId } = session.metadata || {};
-
-  if (!bookingId) {
-    console.warn("⚠️ No bookingId in session metadata");
-    return;
-  }
-
-  try {
-    let booking;
-    try {
-      booking = await Booking.findById(bookingId);
-    } catch (dbErr) {
-      console.error(`❌ DB error fetching booking ${bookingId}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
-      return;
-    }
-    if (!booking) {
-      console.warn(`⚠️ Booking not found: ${bookingId}`);
-      return;
-    }
-
-    // Fetch session details to get payment info
-    const stripe = getStripe();
-    const fullSession = await stripe.checkout.sessions.retrieve(session.id);
-
-    // Find payment record by payment_intent OR by checkout session id
-    let payment;
-    try {
-      payment = await Payment.findOne({
-        $or: [
-          { stripePaymentIntentId: fullSession.payment_intent },
-          { stripeCheckoutSessionId: fullSession.id },
-        ],
-      });
-    } catch (dbErr) {
-      console.error(`❌ DB error finding payment for booking ${bookingId}, session ${fullSession.id}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
-      return;
-    }
-
-    if (!payment) {
-      // Create payment record if not exists. Use payment_intent when present otherwise store checkout session id.
-      const paymentData = {
-        booking: booking._id,
-        user: booking.user || userId,
-        amount: booking.totalPrice,
-        currency: fullSession.currency || "inr",
-        status: "pending",
-      };
-      if (fullSession.payment_intent) paymentData.stripePaymentIntentId = fullSession.payment_intent;
-      else paymentData.stripeCheckoutSessionId = fullSession.id;
-
-      try {
-        payment = await Payment.create(paymentData);
-        console.log(`✅ Payment record created for booking ${bookingId}, session ${fullSession.id} (status: pending)`);
-      } catch (createErr) {
-        console.error(`❌ DB error creating payment for booking ${bookingId}, session ${fullSession.id}:`, createErr && createErr.stack ? createErr.stack : createErr, "input:", paymentData);
-        return;
-      }
-    } else {
-      payment.status = "pending";
-      // Ensure we store checkout session id if it was missing
-      if (!payment.stripeCheckoutSessionId && fullSession.id) payment.stripeCheckoutSessionId = fullSession.id;
-      try {
-        await payment.save();
-        console.log(`ℹ️ Payment record updated for booking ${bookingId}, session ${fullSession.id} (status set to pending)`);
-      } catch (saveErr) {
-        console.error(`❌ DB error saving payment for booking ${bookingId}, session ${fullSession.id}:`, saveErr && saveErr.stack ? saveErr.stack : saveErr);
-      }
-    }
-
-    console.log(`✅ Checkout session processed for booking ${bookingId}`);
-  } catch (error) {
-    console.error("❌ Error in handleCheckoutSessionCompleted:", error && error.stack ? error.stack : error);
-  }
-}
-
-// Handle payment intent succeeded
-async function handlePaymentIntentSucceeded(paymentIntent) {
-  const { bookingId, userId } = paymentIntent.metadata || {};
-
-  if (!bookingId) {
-    console.warn("⚠️ No bookingId in payment intent metadata");
-    return;
-  }
-
-  try {
-    let booking;
-    try {
-      booking = await Booking.findById(bookingId);
-    } catch (dbErr) {
-      console.error(`❌ DB error fetching booking ${bookingId}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
-      return;
-    }
-    if (!booking) {
-      console.warn(`⚠️ Booking not found: ${bookingId}`);
-      return;
-    }
-
-    // Get card info from payment intent charges
-    let cardInfo = {};
-    if (paymentIntent.charges && paymentIntent.charges.data && paymentIntent.charges.data[0]) {
-      const charge = paymentIntent.charges.data[0];
-      const cardDetails = charge.payment_method_details?.card;
-
-      if (cardDetails) {
-        cardInfo = {
-          stripePaymentMethodId: charge.payment_method,
-          cardBrand: cardDetails.brand || "unknown",
-          cardFunding: cardDetails.funding || "unknown",
-          cardLast4: cardDetails.last4,
-          cardExpMonth: cardDetails.exp_month,
-          cardExpYear: cardDetails.exp_year,
-        };
-      }
-    }
-
-    // Update or create payment record. Try to find by intent id OR by checkout session id stored on payment.
-    let payment;
-    try {
-      // possible metadata keys that might contain session id
-      const sessionIdsToCheck = [
-        paymentIntent.metadata?.sessionId,
-        paymentIntent.metadata?.session_id,
-        paymentIntent.metadata?.checkout_session_id,
-        paymentIntent.metadata?.checkoutSessionId,
-      ].filter(Boolean);
-
-      const orClauses = [{ stripePaymentIntentId: paymentIntent.id }];
-      sessionIdsToCheck.forEach((sId) => orClauses.push({ stripeCheckoutSessionId: sId }));
-
-      payment = await Payment.findOne({ $or: orClauses });
-    } catch (dbErr) {
-      console.error(`❌ DB error finding payment for booking ${bookingId}, intent ${paymentIntent.id}:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
-    }
-
-    if (payment) {
-      payment.status = "confirmed";
-      if (cardInfo && Object.keys(cardInfo).length > 0) {
-        Object.assign(payment, cardInfo);
-      }
-      // ensure we persist the intent id
-      if (!payment.stripePaymentIntentId) payment.stripePaymentIntentId = paymentIntent.id;
-      try {
-        await payment.save();
-        console.log(`✅ Payment record updated to confirmed for booking ${bookingId}, intent ${paymentIntent.id}`);
-      } catch (saveErr) {
-        console.error(`❌ DB error saving payment for booking ${bookingId}, intent ${paymentIntent.id}:`, saveErr && saveErr.stack ? saveErr.stack : saveErr);
-      }
-    } else {
-      const createData = {
-        booking: booking._id,
-        user: booking.user || userId,
-        stripePaymentIntentId: paymentIntent.id,
-        amount: (paymentIntent.amount || 0) / 100,
-        currency: paymentIntent.currency || "inr",
-        status: "confirmed",
-        ...cardInfo,
-      };
-      try {
-        await Payment.create(createData);
-        console.log(`✅ Payment record created for booking ${bookingId}, intent ${paymentIntent.id} (status: confirmed)`);
-      } catch (createErr) {
-        console.error(`❌ DB error creating payment for booking ${bookingId}, intent ${paymentIntent.id}:`, createErr && createErr.stack ? createErr.stack : createErr, "input:", createData);
-      }
-    }
-
-    // Update booking payment status
-    booking.paymentStatus = "Paid";
-    await booking.save();
-    console.log(`✅ Booking ${bookingId} paymentStatus updated to Paid`);
-
-    console.log(`✅ Payment succeeded and booking ${bookingId} marked as Paid`);
-  } catch (error) {
-    console.error("❌ Error in handlePaymentIntentSucceeded:", error && error.stack ? error.stack : error);
-  }
-}
-
-// Handle payment intent failed
-async function handlePaymentIntentFailed(paymentIntent) {
-  const { bookingId } = paymentIntent.metadata || {};
-
-  if (!bookingId) return;
-
-  try {
-    let payment = await Payment.findOne({ stripePaymentIntentId: paymentIntent.id });
-
-    if (payment) {
-      payment.status = "failed";
-      await payment.save();
-      console.log(`❌ Payment record updated to failed for booking ${bookingId}, intent ${paymentIntent.id}`);
-    } else {
-      console.log(`❌ No payment record found to update for failed payment, booking ${bookingId}, intent ${paymentIntent.id}`);
-    }
-
-    console.log(`❌ Payment failed for booking ${bookingId}`);
-  } catch (error) {
-    console.error("❌ Error in handlePaymentIntentFailed:", error && error.stack ? error.stack : error);
-  }
-}
-
-// Handle charge succeeded (additional safety check)
-async function handleChargeSucceeded(charge) {
-  const { bookingId, userId } = charge.metadata || {};
-
-  if (!bookingId) return;
-
-  try {
-    const booking = await Booking.findById(bookingId);
-    if (booking && booking.paymentStatus !== "Paid") {
-      // Double-check: ensure payment intent also succeeded
-      const stripe = getStripe();
-      if (charge.payment_intent) {
-        const pi = await stripe.paymentIntents.retrieve(charge.payment_intent);
-        if (pi.status === "succeeded") {
-          booking.paymentStatus = "Paid";
-          await booking.save();
-          console.log(`✅ Charge verified and booking marked as Paid: ${bookingId}`);
-        }
-      }
-    }
-  } catch (error) {
-    console.error("❌ Error in handleChargeSucceeded:", error && error.stack ? error.stack : error);
-  }
-}
+// Webhooks removed: this project uses frontend-driven save endpoints instead of Stripe webhooks.
 
 // ============================================
 // Get Payment History for User
@@ -479,6 +173,161 @@ export const getPaymentHistory = async (req, res) => {
     } catch (error) {
         console.error("❌ getPaymentSession error:", error && error.stack ? error.stack : error);
         return res.status(500).json({ success: false, message: "Failed to fetch payment session", error: error.message });
+    }
+  };
+  //==================================================
+  // Save session & booking sent from frontend
+  // POST /payments/save-frontend  { session, booking }
+  // This accepts the Stripe `session` object (as returned by the frontend) and
+  // the booking object, then creates/updates a Payment record and marks booking Paid when appropriate.
+  //==================================================
+  export const saveFrontendSession = async (req, res) => {
+    try {
+      const { session, booking: bookingFromClient } = req.body || {};
+
+      if (!session && !bookingFromClient) {
+        return res.status(400).json({ success: false, message: 'session or booking required in body' });
+      }
+
+      // Determine bookingId from session metadata or booking object
+      const bookingId = (session && session.metadata && session.metadata.bookingId) || (bookingFromClient && bookingFromClient._id);
+      if (!bookingId) return res.status(400).json({ success: false, message: 'bookingId missing in session metadata or booking object' });
+
+      // Fetch booking from DB
+      let booking;
+      try {
+        booking = await Booking.findById(bookingId).populate('user').populate('car');
+      } catch (dbErr) {
+        console.error(`❌ DB error fetching booking ${bookingId} in saveFrontendSession:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
+        return res.status(500).json({ success: false, message: 'Failed to fetch booking', error: dbErr && dbErr.message ? dbErr.message : String(dbErr) });
+      }
+      if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+      const stripe = getStripe();
+
+      // normalize values
+      const sessionId = session?.id || session?.sessionId || null;
+      const paymentIntentId = session?.payment_intent || null;
+      const amountMajor = session?.amount_total ? (session.amount_total / 100) : (booking.totalPrice || 0);
+      const currency = session?.currency || process.env.STRIPE_CURRENCY || 'inr';
+      const userRef = booking.user && booking.user._id ? booking.user._id : (session?.metadata?.userId || bookingFromClient?.user?._id);
+      const status = (session?.payment_status === 'paid' || session?.status === 'complete') ? 'confirmed' : 'pending';
+
+      // Find existing payment by payment_intent or session id
+      let payment;
+      try {
+        payment = await Payment.findOne({
+          $or: [
+            { stripePaymentIntentId: paymentIntentId },
+            { stripeCheckoutSessionId: sessionId },
+          ],
+        });
+      } catch (dbErr) {
+        console.error(`❌ DB error finding payment for booking ${bookingId} in saveFrontendSession:`, dbErr && dbErr.stack ? dbErr.stack : dbErr);
+        return res.status(500).json({ success: false, message: 'DB lookup failed', error: dbErr && dbErr.message ? dbErr.message : String(dbErr) });
+      }
+
+      // Prepare data to save
+      const paymentData = {
+        booking: booking._id,
+        user: userRef,
+        amount: amountMajor,
+        currency,
+        status,
+        stripeCheckoutSessionId: sessionId || undefined,
+        stripePaymentIntentId: paymentIntentId || undefined,
+        stripeRaw: session || bookingFromClient || {},
+      };
+
+      // copy simple fields from session or client payload if present
+      const copyIfPresent = (field, targetName = field) => {
+        if (session && session[field] !== undefined) paymentData[targetName] = session[field];
+        else if (bookingFromClient && bookingFromClient[field] !== undefined) paymentData[targetName] = bookingFromClient[field];
+      };
+
+      copyIfPresent('cardFunding');
+      copyIfPresent('cardBrand');
+      copyIfPresent('cardLast4');
+      copyIfPresent('cardExpMonth');
+      copyIfPresent('cardExpYear');
+      copyIfPresent('stripePaymentMethodId');
+      copyIfPresent('stripeChargeId');
+
+      // allow frontend to pass created/updated timestamps (ISO string or epoch seconds)
+      const parseMaybeDate = (v) => {
+        if (!v) return undefined;
+        if (typeof v === 'number') return new Date(v);
+        const parsed = new Date(v);
+        return isNaN(parsed.getTime()) ? undefined : parsed;
+      };
+      const createdFrom = session?.createdAt || session?.created || bookingFromClient?.createdAt;
+      const updatedFrom = session?.updatedAt || session?.updated || bookingFromClient?.updatedAt;
+      const createdAtVal = parseMaybeDate(createdFrom);
+      const updatedAtVal = parseMaybeDate(updatedFrom);
+      if (createdAtVal) paymentData.createdAt = createdAtVal;
+      if (updatedAtVal) paymentData.updatedAt = updatedAtVal;
+
+      // If we have a payment intent and stripe client, attempt to attach charge/card info
+      if (stripe && paymentIntentId) {
+        try {
+          const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+          const charge = pi.charges?.data?.[0];
+          if (charge) {
+            paymentData.stripeChargeId = charge.id;
+            paymentData.stripePaymentMethodId = charge.payment_method || paymentData.stripePaymentMethodId;
+            if (charge.payment_method_details?.card) {
+              paymentData.cardBrand = charge.payment_method_details.card.brand || paymentData.cardBrand;
+              paymentData.cardLast4 = charge.payment_method_details.card.last4 || paymentData.cardLast4;
+              paymentData.cardExpMonth = charge.payment_method_details.card.exp_month || paymentData.cardExpMonth;
+              paymentData.cardExpYear = charge.payment_method_details.card.exp_year || paymentData.cardExpYear;
+            }
+          }
+        } catch (piErr) {
+          console.error(`ℹ️ Could not retrieve PaymentIntent ${paymentIntentId} in saveFrontendSession:`, piErr && piErr.stack ? piErr.stack : piErr);
+        }
+      }
+
+      // Create or update
+      if (!payment) {
+        try {
+          payment = await Payment.create(paymentData);
+          console.log(`✅ Saved payment from frontend for booking ${bookingId}, session ${sessionId || '<none>'}`);
+        } catch (createErr) {
+          console.error(`❌ DB error creating payment from frontend for booking ${bookingId}:`, createErr && createErr.stack ? createErr.stack : createErr, 'input:', paymentData);
+          return res.status(500).json({ success: false, message: 'Failed to create payment', error: createErr.message });
+        }
+      } else {
+        // update existing
+        try {
+          // merge and overwrite fields from paymentData
+          Object.keys(paymentData).forEach((k) => {
+            payment[k] = paymentData[k];
+          });
+          // ensure mongoose updatedAt gets updated when we save
+          if (updatedAtVal) payment.updatedAt = updatedAtVal;
+          await payment.save();
+          console.log(`ℹ️ Updated existing payment from frontend for booking ${bookingId}, session ${sessionId || '<none>'}`);
+        } catch (saveErr) {
+          console.error(`❌ DB error saving payment from frontend for booking ${bookingId}:`, saveErr && saveErr.stack ? saveErr.stack : saveErr);
+          return res.status(500).json({ success: false, message: 'Failed to update payment', error: saveErr.message });
+        }
+      }
+
+      // If payment confirmed, update booking
+      if (status === 'confirmed') {
+        try {
+          booking.paymentStatus = 'Paid';
+          await booking.save();
+          console.log(`✔ Booking ${bookingId} marked Paid by frontend save`);
+        } catch (bkErr) {
+          console.error(`❌ DB error updating booking ${bookingId} after frontend save:`, bkErr && bkErr.stack ? bkErr.stack : bkErr);
+        }
+      }
+
+      return res.json({ success: true, payment, booking });
+    } catch (err) {
+      console.error('❌ saveFrontendSession error:', err && err.stack ? err.stack : err);
+      return res.status(500).json({ success: false, message: 'saveFrontendSession failed', error: err.message || String(err) });
     }
   };
 // https://localhost:44308/Payment/Success?cartId=15&sessionId=cs_test_a1lxHsAeBbVawbjvwNZ289H532TgKjUbt7ed1BuKxgnoTGnBRyccdVNzhY

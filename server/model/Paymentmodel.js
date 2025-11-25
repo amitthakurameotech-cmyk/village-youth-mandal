@@ -45,7 +45,14 @@ const paymentSchema = new mongoose.Schema(
     },
     currency: {
       type: String,
-      default: "usd",
+      default: process.env.STRIPE_CURRENCY || "inr",
+    },
+    stripeChargeId: {
+      type: String,
+    },
+    // Store the raw stripe object (session / paymentIntent) for debugging/audit (not sensitive card data)
+    stripeRaw: {
+      type: mongoose.Schema.Types.Mixed,
     },
     status: {
       type: String,
