@@ -108,17 +108,24 @@ export const handleWebhook = async (req, res) => {
     // In production, always verify signatures
   }
 
+  // Helpful debug info
+  try {
+    console.log("ℹ️ Received webhook, headers:", { signature: !!sig, length: req.headers["content-length"] });
+  } catch (e) {}
+
   let event;
   try {
-    const rawBody = req.body && typeof req.body === "string" ? req.body : req.body?.toString?.() || "";
+    // When using express.raw the `req.body` is a Buffer which must be passed directly to constructEvent
     if (webhookSecret) {
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } else {
-      event = JSON.parse(rawBody || "{}");
+      // Fallback for local testing when no webhook secret is configured
+      const text = req.body && req.body.toString ? req.body.toString() : "";
+      event = JSON.parse(text || "{}");
     }
   } catch (err) {
-    console.error("❌ Webhook signature verification failed:", err && err.stack ? err.stack : err);
-    return res.status(400).json({ success: false, message: "Webhook signature verification failed" });
+    console.error("❌ Webhook signature verification failed or invalid payload:", err && err.stack ? err.stack : err, "sig:", sig);
+    return res.status(400).json({ success: false, message: "Webhook signature verification failed or invalid payload" });
   }
 
   try {
