@@ -9,17 +9,23 @@ import { uploadcarpic, uploadProfilePic } from './middleware/multerMiddleware.js
 import { createCar, deleteCar,  getCarDataById,  getCars, updateCar } from "./controller/Carcontoller.js";
 import {  approveCancelRequest, createBooking, deleteBooking, getBookingDataByUserId, getBookings, updateBooking } from "./controller/BookingController.js";
 import { authMiddleware, isAdmin } from "./middleware/authMiddleware.js";
-import { createCheckoutSession, getPaymentHistory, getPaymentSession, saveFrontendSession } from "./controller/PaymentController.js";
+import { createCheckoutSession, getPaymentHistory, getPaymentSession, saveFrontendSession, handleWebhook } from "./controller/PaymentController.js";
 
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
 const app = express();
 
-// Read Stripe key (webhooks removed)
+// Read Stripe keys
 const _stripeSecret = process.env.STRIPE_SECRET_KEY;
+const _webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
 if (!_stripeSecret) {
-  console.warn("⚠️ STRIPE secret key not set. Checkout session creation will fail until STRIPE_SECRET_KEY is configured.");
+  console.warn("⚠️ STRIPE_SECRET_KEY not set. Checkout session creation will fail.");
+}
+
+if (!_webhookSecret) {
+  console.warn("⚠️ STRIPE_WEBHOOK_SECRET not set. Webhooks will fail signature verification.");
 }
 
 app.use(express.json());
@@ -59,12 +65,14 @@ app.patch("/approve/:id",approveCancelRequest );
 // =======================
 // 🔐 Payment ROUTES (Stripe Checkout)
 // =======================
+// Webhook must be mounted BEFORE express.json() to preserve raw body
+app.post("/payments/webhook", express.raw({ type: "application/json" }), handleWebhook);
+// Other payment endpoints
 // app.post("/payments/checkout/:bookingId", authMiddleware, createCheckoutSession);
-app.post("/payments/create-intent/:bookingId", authMiddleware, createCheckoutSession); // Alias for backward compatibility
+app.post("/payments/create-intent/:bookingId", authMiddleware, createCheckoutSession);
 app.get("/payments/user/:userId", authMiddleware, getPaymentHistory);
 app.get("/payments/session/:sessionId", getPaymentSession);
 app.post("/payments/save-frontend", saveFrontendSession);
-
 
 
 // =======================
